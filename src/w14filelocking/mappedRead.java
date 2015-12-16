@@ -45,6 +45,8 @@ public class mappedRead {
     private static final int STATUS_READ = 0;
     private int counter = 0;
 
+    private int MAXVAL;
+
     private FileChannel ch;
     private MappedByteBuffer mappedBB;
     private RandomAccessFile raf;
@@ -62,6 +64,7 @@ public class mappedRead {
         ch = raf.getChannel();
         mappedBB = ch.map(FileChannel.MapMode.READ_WRITE, 0, NBYTES);
         readConsumer();
+        System.out.println(" done");
         System.out.println("number of edges: " + edges.size());
         JSF31KochFractalFX.edges = this.edges;
         t = new Thread() {
@@ -76,6 +79,7 @@ public class mappedRead {
         FileLock exclusiveLock = null;
         try {
             boolean finished = false;
+            System.out.print("loading");
             while (!finished) {
                 // Probeer het lock te verkrijgen
                 exclusiveLock = ch.lock(0, NBYTES, EXCLUSIVE);
@@ -86,31 +90,27 @@ public class mappedRead {
                 //      8 .. 63:    56 bytes double with value
                 // Vraag de maximumwaarde, status en geproduceerde waarde op
                 mappedBB.position(0);
-                int maxVal = mappedBB.getInt();
+                MAXVAL = mappedBB.getInt();
                 int status = mappedBB.getInt();
-                double X1 = mappedBB.getDouble();
-                double Y1 = mappedBB.getDouble();
-                double X2 = mappedBB.getDouble();
-                double Y2 = mappedBB.getDouble();
-                String color = new Color(mappedBB.getDouble(), mappedBB.getDouble(), mappedBB.getDouble(), 1).toString();
 
-                //create edge
-                Edge edge = new Edge(X1, Y1, X2, Y2, color);
-                edges.add(edge);
-                counter++;
                 if (status == STATUS_NOT_READ) {
                     // Nieuwe waarde gelezen. Zet status in bestand
+                    double X1 = mappedBB.getDouble();
+                    double Y1 = mappedBB.getDouble();
+                    double X2 = mappedBB.getDouble();
+                    double Y2 = mappedBB.getDouble();
+                    String color = new Color(mappedBB.getDouble(), mappedBB.getDouble(), mappedBB.getDouble(), 1).toString();
+
+                    //create edge
+                    Edge edge = new Edge(X1, Y1, X2, Y2, color);
+                    edges.add(edge);
+                    counter++;
                     mappedBB.position(4);
                     mappedBB.putInt(STATUS_READ);
-                    System.out.println("-------");
-                    System.out.println(edge.X1);
-                    System.out.println(edge.Y1);
-                    System.out.println(edge.X2);
-                    System.out.println(edge.Y2);
-                    System.out.println(edge.color);
                     // Bepaal of we klaar zijn, dat is als de gelezen waarde
                     // gelijk is aan de maxVal in bytes 0 .. 3 van het bestand
-                    finished = (counter == maxVal);
+                    System.out.print(".");
+                    finished = (counter == MAXVAL);
                 }
                 Thread.sleep(10);
                 // release the lock

@@ -90,29 +90,14 @@ public class JSF31KochFractalFX extends Application {
         // grid.setGridLinesVisible(true);
         // Drawing panel for Koch fractal
         kochPanel = new Canvas(kpWidth, kpHeight);
-        grid.add(kochPanel, 0, 3, 25, 1);
+        grid.add(kochPanel, 0, 1, 25, 1);
 
         // Labels to present number of edges for Koch fractal
         labelNrEdges = new Label("Nr edges:");
         labelNrEdgesText = new Label();
+        labelNrEdgesText.setText("" + edges.size());
         grid.add(labelNrEdges, 0, 0, 4, 1);
-        grid.add(labelNrEdgesText, 3, 0, 22, 1);
-
-        // Labels to present time of calculation for Koch fractal
-        labelCalc = new Label("Calculating:");
-        labelCalcText = new Label();
-        grid.add(labelCalc, 0, 1, 4, 1);
-        grid.add(labelCalcText, 3, 1, 22, 1);
-
-        // Labels to present time of drawing for Koch fractal
-        labelDraw = new Label("Drawing:");
-        labelDrawText = new Label();
-        grid.add(labelDraw, 0, 2, 4, 1);
-        grid.add(labelDrawText, 3, 2, 22, 1);
-
-        // Label to present current level of Koch fractal
-        labelLevel = new Label("Level: " + currentLevel);
-        grid.add(labelLevel, 0, 6);
+        grid.add(labelNrEdgesText, 4, 0, 22, 1);
 
         // Button to fit Koch fractal in Koch panel
         Button buttonFitFractal = new Button();
@@ -124,7 +109,7 @@ public class JSF31KochFractalFX extends Application {
             }
 
         });
-        grid.add(buttonFitFractal, 14, 6);
+        grid.add(buttonFitFractal, 0, 2);
 
         // Add mouse clicked event to Koch panel
         kochPanel.addEventHandler(MouseEvent.MOUSE_CLICKED,
@@ -157,7 +142,7 @@ public class JSF31KochFractalFX extends Application {
 
         // Create the scene and add the grid pane
         Group root = new Group();
-        Scene scene = new Scene(root, kpWidth + 50, kpHeight + 180);
+        Scene scene = new Scene(root, kpWidth + 50, kpHeight + 100);
         root.getChildren().add(grid);
 
         // Define title and assign the scene for main window
@@ -165,20 +150,7 @@ public class JSF31KochFractalFX extends Application {
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        edges.add(new Edge(0.0669872981077807, 0.75, 0.9330127018922193, 0.75, "0x0000ffff"));
-        edges.add(new Edge(0.5, 0.0, 0.0669872981077807, 0.75, "0x00ff00ff"));
-        edges.add(new Edge(0.9330127018922193, 0.75, 0.5, 0.0, "0xff0000ff"));
         drawEdges();
-        Timer timer = new Timer();
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                if (currentLevel != previousLevel) {
-                    previousLevel = currentLevel;
-                    drawEdges();
-                }
-            }
-        }, 1 * 1000, 1 * 1000);
     }
 
     public void drawEdges() {
@@ -201,8 +173,6 @@ public class JSF31KochFractalFX extends Application {
 
         // Adjust edge for zoom and drag
         Edge e1 = edgeAfterZoomAndDrag(e);
-
-        labelLevel.setText("Level: " + currentLevel);
 
         // Set line color
         gc.setStroke(Color.web(e1.color));
