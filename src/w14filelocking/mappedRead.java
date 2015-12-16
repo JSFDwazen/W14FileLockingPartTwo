@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,91 +37,95 @@ public class mappedRead {
     private File fileMapped;
     private int level;
     private final List<Edge> edges;
-    private final TimeStamp timeStamp;
+
+    private static final boolean EXCLUSIVE = false;
+    private static final boolean SHARED = true;
+    private static final int NBYTES = 64;
+    private static final int STATUS_NOT_READ = 1;
+    private static final int STATUS_READ = 0;
+    private int counter = 0;
+
+    private FileChannel ch;
+    private MappedByteBuffer mappedBB;
+    private RandomAccessFile raf;
 
     public static void main(String[] args) throws IOException {
         new mappedRead();
     }
 
     public mappedRead() throws IOException {
-        this.edges = new ArrayList<>();
-        timeStamp = new TimeStamp();
-        Thread t = new Thread(){
-            public void run(){
+        this.edges = new ArrayList<>();        
+        this.fileMapped = new File("/media/Fractal/fileMappedLock.tmp");
+        raf = new RandomAccessFile(this.fileMapped, "rw");
+        ch = raf.getChannel();
+        mappedBB = ch.map(FileChannel.MapMode.READ_WRITE, 0, NBYTES);
+        readConsumer();
+        Thread t = new Thread() {
+            public void run() {
                 JSF31KochFractalFX.main(new String[0]);
             }
         };
         t.start();
-        checkChange();
     }
 
-    public void checkChange() {
-        final WatchService watchService;
-        Path dir = Paths.get("/media/Fractal/");
-        WatchKey key;
+    public void readConsumer() {
+        FileLock exclusiveLock = null;
         try {
-            watchService = FileSystems.getDefault().newWatchService();
-            dir.register(watchService, ENTRY_MODIFY);
+            boolean finished = false;
+            while (!finished) {
+                // Probeer het lock te verkrijgen
+                exclusiveLock = ch.lock(0, NBYTES, EXCLUSIVE);
 
-            while (true) {
-                key = watchService.take();
-                for (WatchEvent<?> watchEvent : key.pollEvents()) {
-                    WatchEvent<Path> ev = (WatchEvent<Path>) watchEvent;
-                    Path fileName = ev.context();
-                    Path child = dir.resolve(fileName);
-                    WatchEvent.Kind kind = ev.kind();
-                    if (kind == ENTRY_MODIFY) {
-                        System.out.println(child + " modified");
-                        this.readFileMapped(child.toFile());
-                        System.out.println(timeStamp.toString());
-                        JSF31KochFractalFX.currentLevel = level;
-                        JSF31KochFractalFX.edges = this.edges;
-                        checkChange();
-                    }
-                }
-            }
-        } catch (InterruptedException ex) {
-            Logger.getLogger(mappedRead.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger(mappedRead.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }
-
-    public void readFileMapped(File file) throws IOException {
-        fileMapped = file;
-        this.edges.clear();
-        this.timeStamp.setBegin("begin readFileMapped");
-        try (RandomAccessFile aFile = new RandomAccessFile(this.fileMapped.getAbsolutePath(), "r"); FileChannel inChannel = aFile.getChannel()) {
-            MappedByteBuffer buffer = inChannel.map(FileChannel.MapMode.READ_ONLY, 0, inChannel.size());
-            buffer.load();
-            this.level = buffer.getInt();
-            for (int i = 0; i < (int) (3 * Math.pow(4, level - 1)); i++) {
-                double X1 = buffer.getDouble();
-                double Y1 = buffer.getDouble();
-                double X2 = buffer.getDouble();
-                double Y2 = buffer.getDouble();
-                String color = new Color(buffer.getDouble(), buffer.getDouble(), buffer.getDouble(), 1).toString();
+                // layout: 
+                //      0 .. 3 :    4 bytes int with maxvalue
+                //      4 .. 7 :    4 bytes int with status
+                //      8 .. 63:    56 bytes double with value
+                // Vraag de maximumwaarde, status en geproduceerde waarde op
+                mappedBB.position(0);
+                int maxVal = mappedBB.getInt();
+                int status = mappedBB.getInt();
+                double X1 = mappedBB.getDouble();
+                double Y1 = mappedBB.getDouble();
+                double X2 = mappedBB.getDouble();
+                double Y2 = mappedBB.getDouble();
+                String color = new Color(mappedBB.getDouble(), mappedBB.getDouble(), mappedBB.getDouble(), 1).toString();
 
                 //create edge
                 Edge edge = new Edge(X1, Y1, X2, Y2, color);
-                this.edges.add(edge);
-            }
-            this.timeStamp.setEnd("eind readFileMapped");
-            System.out.println("number of edges: " + edges.size());
-            //print read edges
-            Scanner scanner = new Scanner(System.in);
-            System.out.print("Wil je de edges uitprinten? (y/n): ");
-            if (scanner.next().equals("y")) {
-                for (Edge edge : edges) {
+                edges.add(edge);
+                counter++;
+                if (status == STATUS_NOT_READ) {
+                    // Nieuwe waarde gelezen. Zet status in bestand
+                    mappedBB.position(4);
+                    mappedBB.putInt(STATUS_READ);
                     System.out.println("-------");
                     System.out.println(edge.X1);
                     System.out.println(edge.Y1);
                     System.out.println(edge.X2);
                     System.out.println(edge.Y2);
                     System.out.println(edge.color);
+                    // Bepaal of we klaar zijn, dat is als de gelezen waarde
+                    // gelijk is aan de maxVal in bytes 0 .. 3 van het bestand
+                    finished = (counter == maxVal);
+                }
+                Thread.sleep(10);
+                // release the lock
+                exclusiveLock.release();
+
+            }
+
+        } catch (InterruptedException ex) {
+            Logger.getLogger(mappedWrite.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
+            Logger.getLogger(mappedWrite.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            if (exclusiveLock != null) {
+                try {
+                    exclusiveLock.release();
+                } catch (IOException ex) {
+                    Logger.getLogger(mappedWrite.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
-            buffer.clear(); // do something with the data and clear/compact it.
         }
     }
 }
