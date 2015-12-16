@@ -41,12 +41,13 @@ public class mappedWrite implements Observer {
     private RandomAccessFile raf;
     private List<Edge> edges;
 
-    private static final boolean EXCLUSIVE = false;
-    private static final boolean SHARED = true;
+    private final boolean EXCLUSIVE = false;
+    private final boolean SHARED = true;
     private int MAXVAL;
-    private static final int NBYTES = 64;
-    private static final int STATUS_NOT_READ = 1;
-    private static final int STATUS_READ = 0;
+    private final int NBYTES = 64;
+    private final int STATUS_NOT_READ = 1;
+    private final int STATUS_READ = 0;
+    private boolean sleep = false;
 
     public static void main(String[] args) throws IOException {
         new mappedWrite();
@@ -55,9 +56,9 @@ public class mappedWrite implements Observer {
     public mappedWrite() throws IOException {
         this.koch = new KochFractal();
         this.fileMapped = new File("/media/Fractal/fileMappedLock.tmp");
-        raf = new RandomAccessFile(this.fileMapped, "rw");
-        ch = raf.getChannel();
-        mappedBB = ch.map(FileChannel.MapMode.READ_WRITE, 0, NBYTES);
+        this.raf = new RandomAccessFile(this.fileMapped, "rw");
+        this.ch = this.raf.getChannel();
+        this.mappedBB = this.ch.map(FileChannel.MapMode.READ_WRITE, 0, this.NBYTES);
         this.edges = new ArrayList<>();
         this.koch.addObserver(this);
         this.level = 1;
@@ -68,17 +69,15 @@ public class mappedWrite implements Observer {
         Scanner scanner = new Scanner(System.in);
         System.out.print("Welk level gegenereerd worden?: ");
         this.level = scanner.nextInt();
+        System.out.print("met sleep voor visibility?(y/n): ");
+        String yn = scanner.next();
+        sleep = yn.equals("Y") || yn.equals("y");
         this.koch.setLevel(level);
-        if (level == 1) {
-            MAXVAL = 3;
-        } else {
-            MAXVAL = (int) (3 * Math.pow(4, level - 1));
-        }
+        MAXVAL = level == 1 ? 3 : (int) (3 * Math.pow(4, level - 1));
         this.koch.generateBottomEdge();
         this.koch.generateLeftEdge();
         this.koch.generateRightEdge();
         writeAsProducer();
-        //this.generate();
     }
 
     @Override
@@ -127,14 +126,13 @@ public class mappedWrite implements Observer {
                     mappedBB.putDouble(Color.valueOf(edge.color).getBlue());
                     counter++;
                 }
-
-                Thread.sleep(10);
+                if (sleep) {
+                    Thread.sleep(10);
+                }
                 // release the lock
                 exclusiveLock.release();
             }
-        } catch (InterruptedException ex) {
-            Logger.getLogger(mappedWrite.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
+        } catch (IOException | InterruptedException ex) {
             Logger.getLogger(mappedWrite.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
             if (exclusiveLock != null) {

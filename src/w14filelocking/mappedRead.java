@@ -60,19 +60,19 @@ public class mappedRead {
     public mappedRead() throws IOException {
         this.edges = new ArrayList<>();
         this.fileMapped = new File("/media/Fractal/fileMappedLock.tmp");
-        raf = new RandomAccessFile(this.fileMapped, "rw");
-        ch = raf.getChannel();
-        mappedBB = ch.map(FileChannel.MapMode.READ_WRITE, 0, NBYTES);
+        this.raf = new RandomAccessFile(this.fileMapped, "rw");
+        this.ch = this.raf.getChannel();
+        this.mappedBB = this.ch.map(FileChannel.MapMode.READ_WRITE, 0, NBYTES);
         readConsumer();
         System.out.println(" done");
         System.out.println("number of edges: " + edges.size());
         JSF31KochFractalFX.edges = this.edges;
-        t = new Thread() {
+        this.t = new Thread() {
             public void run() {
                 JSF31KochFractalFX.main(new String[0]);
             }
         };
-        t.start();
+        this.t.start();
     }
 
     public void readConsumer() {
@@ -112,13 +112,9 @@ public class mappedRead {
                     System.out.print(".");
                     finished = (counter == MAXVAL);
                 }
-                Thread.sleep(10);
                 // release the lock
                 exclusiveLock.release();
-
             }
-        } catch (InterruptedException ex) {
-            Logger.getLogger(mappedWrite.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
             Logger.getLogger(mappedWrite.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
